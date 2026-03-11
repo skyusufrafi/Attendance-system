@@ -50,4 +50,10 @@ app.get('/api/attendance/:sessionId', async (req, res) => {
 });
 
 // --- START SERVER ---
-app.listen(3000, () => console.log('Server running on http://localhost:3000'));
+
+// This tells the code to use Render's port, or 3000 if running locally
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server is live on port ${PORT}`);
+});
