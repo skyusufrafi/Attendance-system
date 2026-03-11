@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head><title>Teacher Dashboard</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h2>Teacher Dashboard</h2>
+    <button onclick="generateQR()">Generate Lecture QR</button>
+    <div id="qrContainer"></div>
+    <h3>Attendance List</h3>
+    <table border="1" id="attendanceTable">
+        <tr><th>Name</th><th>ID</th><th>Time</th></tr>
+    </table>
+
+    <script>
+        let currentSessionId = '';
+        async function generateQR() {
+            const res = await fetch('/api/generate-session', { method: 'POST' });
+            const data = await res.json();
+            currentSessionId = data.sessionId;
+            document.getElementById('qrContainer').innerHTML = `<img src="${data.qrData}"> <p>ID: ${currentSessionId}</p>`;
+            startPolling();
+        }
+
+        function startPolling() {
+            setInterval(async () => {
+                if(!currentSessionId) return;
+                const res = await fetch(`/api/attendance/${currentSessionId}`);
+                const list = await res.json();
+                const table = document.getElementById('attendanceTable');
+                table.innerHTML = '<tr><th>Name</th><th>ID</th><th>Time</th></tr>' + 
+                    list.map(a => `<tr><td>${a.studentName}</td><td>${a.studentId}</td><td>${new Date(a.timestamp).toLocaleTimeString()}</td></tr>`).join('');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

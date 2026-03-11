@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Student Attendance</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+<body>
+    <div class="container">
+        <h2>Student Login & Scan</h2>
+        <div id="loginSection">
+            <input type="text" id="name" placeholder="Full Name">
+            <input type="text" id="sid" placeholder="Student ID">
+            <button onclick="startScanner()">Login to Session</button>
+        </div>
+
+        <div id="scanSection" style="display:none;">
+            <p>Welcome, <span id="displayName"></span></p>
+            <div id="reader"></div>
+            <p id="msg"></p>
+        </div>
+    </div>
+
+    <script>
+        let userLocation = null;
+
+        function startScanner() {
+            const name = document.getElementById('name').value;
+            const sid = document.getElementById('sid').value;
+
+            if(!name || !sid) return alert("Please enter details");
+
+            // Get Geolocation
+            navigator.geolocation.getCurrentPosition((pos) => {
+                userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                document.getElementById('loginSection').style.display = 'none';
+                document.getElementById('scanSection').style.display = 'block';
+                document.getElementById('displayName').innerText = name;
+                
+                const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+                scanner.render(onScanSuccess);
+            }, () => {
+                alert("Please enable location to mark attendance!");
+            });
+        }
+
+        async function onScanSuccess(decodedText) {
+            const res = await fetch('/api/submit-attendance', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    studentName: document.getElementById('name').value, 
+                    studentId: document.getElementById('sid').value, 
+                    sessionId: decodedText,
+                    location: userLocation // Sending location to server
+                })
+            });
+            const data = await res.json();
+            document.getElementById('msg').innerText = data.message;
+        }
+    </script>
+</body>
+</html>
