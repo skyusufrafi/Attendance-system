@@ -9,9 +9,8 @@
 <body>
     <div id="login-box" class="container card-small">
         <h2>Secure Login</h2>
-        <input type="text" id="t-name" placeholder="Name">
-        <input type="password" id="t-code" placeholder="Code (2404)">
-        <button onclick="login()">Login</button>
+        <input type="password" id="t-code" placeholder="Enter Code (2404)">
+        <button onclick="login()">Enter</button>
     </div>
 
     <div id="dash" class="container" style="display:none;">
@@ -22,13 +21,15 @@
 
         <div id="live-tab" class="grid">
             <div class="card">
+                <h3>Start Session</h3>
                 <input type="text" id="lec" placeholder="Lecture Title">
-                <button onclick="startSession()">Start Lecture</button>
-                <div id="qr-display"></div>
+                <button onclick="startSession()">Generate QR</button>
+                <div id="qr-display" style="margin-top:15px;"></div>
             </div>
             <div class="card">
-                <table id="live-table">
-                    <thead><tr><th>Name</th><th>ID</th><th>Dist</th></tr></thead>
+                <h3>Attendance List</h3>
+                <table>
+                    <thead><tr><th>Name</th><th>ID</th><th>Distance</th></tr></thead>
                     <tbody id="list-body"></tbody>
                 </table>
             </div>
@@ -47,7 +48,7 @@
                 document.getElementById('login-box').style.display='none';
                 document.getElementById('dash').style.display='block';
                 loadHistory();
-            } else { alert("Wrong Code"); }
+            } else { alert("Access Denied"); }
         }
 
         function showTab(t) {
@@ -61,7 +62,6 @@
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        teacherName: document.getElementById('t-name').value,
                         lectureName: document.getElementById('lec').value,
                         location: { lat: pos.coords.latitude, lng: pos.coords.longitude }
                     })
@@ -88,7 +88,7 @@
             document.getElementById('hist-container').innerHTML = data.map(s => `
                 <div class="card" style="display:flex; justify-content:space-between; margin-bottom:10px;">
                     <span>${s.lectureName} (${new Date(s.createdAt).toLocaleDateString()})</span>
-                    <button onclick="downloadPDF('${s.uniqueId}', '${s.lectureName}')" style="width:auto;">Download</button>
+                    <button onclick="downloadPDF('${s.uniqueId}', '${s.lectureName}')" style="width:auto;">PDF</button>
                 </div>
             `).join('');
         }
@@ -98,7 +98,7 @@
             const data = await res.json();
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
-            doc.text(`Attendance Report: ${name}`, 14, 15);
+            doc.text(`Report: ${name}`, 14, 15);
             doc.autoTable({ head: [['Name', 'ID', 'Distance']], body: data.map(r => [r.studentName, r.studentId, r.distanceFromTeacher+'m']) });
             doc.save(`${name}.pdf`);
         }

@@ -3,105 +3,75 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Submit Attendance | Smart System</title>
+    <title>Student Attendance</title>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
 <body>
     <div class="container card-small">
-        <h2>Student Attendance</h2>
-        <p class="subtitle">Please enter your details and allow location access.</p>
+        <h2>Scan QR Code</h2>
         
-        <div id="form-div">
-            <div class="input-group">
-                <input type="text" id="s-name" placeholder="Full Name" required>
-            </div>
-            <div class="input-group">
-                <input type="text" id="s-id" placeholder="Student ID Number" required>
-            </div>
-            <div class="input-group">
-                <input type="text" id="s-session" placeholder="Session ID (from QR)" required>
-            </div>
-            
-            <button onclick="submitAttendance()" id="sub-btn">Submit Attendance</button>
+        <div id="reader" style="width: 100%; border-radius: 10px; overflow: hidden; margin-bottom: 10px;"></div>
+        
+        <div id="input-fields">
+            <input type="text" id="s-name" placeholder="Full Name">
+            <input type="text" id="s-id" placeholder="Student ID">
+            <input type="text" id="s-session" placeholder="Session ID (Auto-fills)">
+            <button id="sub-btn" onclick="submitAttendance()">Submit Attendance</button>
         </div>
-
-        <div id="status-container">
-            <p id="msg"></p>
-            <p id="dist-info"></p>
-        </div>
+        <p id="status-msg"></p>
     </div>
 
     <script>
-        // Generates a unique digital signature for this specific phone/browser
+        const html5QrCode = new Html5Qrcode("reader");
+
+        // Start Camera Function
+        const startScanner = () => {
+            html5QrCode.start(
+                { facingMode: "environment" }, // Rear camera
+                { fps: 10, qrbox: { width: 250, height: 250 } },
+                (decodedText) => {
+                    document.getElementById('s-session').value = decodedText;
+                    // Vibrate on success
+                    if (navigator.vibrate) navigator.vibrate(100);
+                }
+            ).catch(err => {
+                console.error("Camera Error:", err);
+                document.getElementById('status-msg').innerText = "Camera failed: Try opening in Chrome/Safari.";
+            });
+        };
+
+        // Auto-start on load
+        window.onload = startScanner;
+
         function getFingerprint() {
-            const info = navigator.userAgent + screen.width + navigator.language;
-            return btoa(info); 
+            return btoa(navigator.userAgent + screen.width + navigator.language);
         }
 
         async function submitAttendance() {
             const btn = document.getElementById('sub-btn');
-            const msg = document.getElementById('msg');
-            const distInfo = document.getElementById('dist-info');
+            const msg = document.getElementById('status-msg');
             
-            const name = document.getElementById('s-name').value;
-            const id = document.getElementById('s-id').value;
-            const sid = document.getElementById('s-session').value;
-
-            if (!name || !id || !sid) {
-                alert("Please fill in all fields.");
-                return;
-            }
-
-            btn.disabled = true;
-            btn.innerText = "Processing...";
-            msg.innerText = "Requesting GPS location...";
-
-            // Capture GPS Coordinates
             navigator.geolocation.getCurrentPosition(async (pos) => {
-                try {
-                    const response = await fetch('/api/submit-attendance', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({
-                            studentName: name,
-                            studentId: id,
-                            sessionId: sid,
-                            fingerprint: getFingerprint(),
-                            location: {
-                                lat: pos.coords.latitude,
-                                lng: pos.coords.longitude
-                            }
-                        })
-                    });
-
-                    const data = await response.json();
-
-                    if (response.ok) {
-                        msg.style.color = "#27ae60";
-                        msg.innerText = "✅ Attendance Marked Successfully!";
-                        distInfo.innerText = `Distance from teacher: ${data.distance} meters`;
-                        document.getElementById('form-div').style.display = 'none';
-                    } else {
-                        // Handles "Already Marked", "Proxy Alert", or "Invalid Session"
-                        throw new Error(data.message || "Server Error");
-                    }
-                } catch (err) {
-                    msg.style.color = "#e74c3c";
-                    msg.innerText = "Error: " + err.message;
-                    btn.disabled = false;
-                    btn.innerText = "Retry Submission";
+                const res = await fetch('/api/submit-attendance', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        studentName: document.getElementById('s-name').value,
+                        studentId: document.getElementById('s-id').value,
+                        sessionId: document.getElementById('s-session').value,
+                        fingerprint: getFingerprint(),
+                        location: { lat: pos.coords.latitude, lng: pos.coords.longitude }
+                    })
+                });
+                const data = await res.json();
+                msg.innerText = data.message;
+                msg.style.color = res.ok ? "green" : "red";
+                if(res.ok) {
+                    html5QrCode.stop(); // Stop camera on success
+                    document.getElementById('input-fields').style.display = 'none';
                 }
-            }, (err) => {
-                msg.style.color = "#e74c3c";
-                msg.innerText = "Location access denied. Please enable GPS and try again.";
-                btn.disabled = false;
-                btn.innerText = "Retry Submission";
-            }, {
-                enableHighAccuracy: true,
-                timeout: 5000,
-                maximumAge: 0
-            });
+            }, () => alert("GPS required for attendance!"));
         }
     </script>
 </body>
