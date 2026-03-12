@@ -1,62 +1,93 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Student Attendance</title>
+    <meta charset="UTF-8">
+    <title>Student Portal | Smart Attendance</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
 <body>
-    <div class="container">
-        <h2>Student Login & Scan</h2>
-        <div id="loginSection">
-            <input type="text" id="name" placeholder="Full Name">
-            <input type="text" id="sid" placeholder="Student ID">
-            <button onclick="startScanner()">Login to Session</button>
-        </div>
-
-        <div id="scanSection" style="display:none;">
-            <p>Welcome, <span id="displayName"></span></p>
-            <div id="reader"></div>
-            <p id="msg"></p>
-        </div>
+    <div class="container card-small">
+        <h2>Student Attendance</h2>
+        <div id="reader" style="width: 100%; border-radius: 10px; overflow: hidden; margin-bottom: 15px;"></div>
+        
+        <input type="text" id="s-name" placeholder="Full Name">
+        <input type="text" id="s-id" placeholder="Student Roll No / ID">
+        <input type="text" id="s-session" placeholder="Scanned Session ID" readonly>
+        
+        <button onclick="submitAttendance()" id="sub-btn">Submit Attendance</button>
+        <p id="msg" style="margin-top: 15px; font-weight: bold;"></p>
     </div>
 
     <script>
-        let userLocation = null;
+        let studentLoc = null;
 
-        function startScanner() {
-            const name = document.getElementById('name').value;
-            const sid = document.getElementById('sid').value;
+        // 1. Initialize QR Scanner
+        const html5QrCode = new Html5Qrcode("reader");
+        const qrConfig = { fps: 10, qrbox: { width: 250, height: 250 } };
 
-            if(!name || !sid) return alert("Please enter details");
+        html5QrCode.start({ facingMode: "environment" }, qrConfig, (decodedText) => {
+            document.getElementById('s-session').value = decodedText;
+            document.getElementById('msg').innerText = "QR Scanned Successfully!";
+            document.getElementById('msg').style.color = "green";
+        });
 
-            // Get Geolocation
-            navigator.geolocation.getCurrentPosition((pos) => {
-                userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                document.getElementById('loginSection').style.display = 'none';
-                document.getElementById('scanSection').style.display = 'block';
-                document.getElementById('displayName').innerText = name;
-                
-                const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-                scanner.render(onScanSuccess);
-            }, () => {
-                alert("Please enable location to mark attendance!");
+        // 2. Get Student Location
+        function getLocation() {
+            return new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(
+                    pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                    err => {
+                        alert("Please allow location access to mark attendance.");
+                        reject(err);
+                    }
+                );
             });
         }
 
-        async function onScanSuccess(decodedText) {
-            const res = await fetch('/api/submit-attendance', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    studentName: document.getElementById('name').value, 
-                    studentId: document.getElementById('sid').value, 
-                    sessionId: decodedText,
-                    location: userLocation // Sending location to server
-                })
-            });
-            const data = await res.json();
-            document.getElementById('msg').innerText = data.message;
+        // 3. Submit Data
+        async function submitAttendance() {
+            const name = document.getElementById('s-name').value;
+            const id = document.getElementById('s-id').value;
+            const sid = document.getElementById('s-session').value;
+            const btn = document.getElementById('sub-btn');
+
+            if (!name || !id || !sid) return alert("Please fill all fields and scan QR");
+
+            btn.disabled = true;
+            btn.innerText = "Checking Location...";
+
+            try {
+                const loc = await getLocation();
+                const res = await fetch('/api/submit-attendance', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        studentName: name,
+                        studentId: id,
+                        sessionId: sid,
+                        location: loc
+                    })
+                });
+
+                const data = await res.json();
+                const msg = document.getElementById('msg');
+                
+                if (res.ok) {
+                    msg.innerText = `Attendance Marked! Distance: ${data.distance}m`;
+                    msg.style.color = data.distance > 50 ? "orange" : "green";
+                    if(data.distance > 50) alert("Warning: You are quite far from the teacher!");
+                } else {
+                    msg.innerText = data.message;
+                    msg.style.color = "red";
+                }
+            } catch (err) {
+                console.error(err);
+                msg.innerText = "Error marking attendance.";
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Submit Attendance";
+            }
         }
     </script>
 </body>
