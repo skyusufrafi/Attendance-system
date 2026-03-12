@@ -1,64 +1,58 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Smart Attendance Admin</title>
+    <title>Teacher Admin</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf-plugin-autotable.min.js"></script>
 </head>
 <body>
-    <div id="login-screen" class="container card-small">
-        <h2>Teacher Login</h2>
+    <div id="login-box" class="container card-small">
+        <h2>Secure Login</h2>
         <input type="text" id="t-name" placeholder="Name">
-        <input type="password" id="t-code" placeholder="Secret Code (2404)">
-        <button onclick="login()">Enter</button>
+        <input type="password" id="t-code" placeholder="Code (2404)">
+        <button onclick="login()">Login</button>
     </div>
 
-    <div id="dashboard" class="container" style="display:none;">
-        <nav class="tabs">
-            <button onclick="showTab('live')">Live Session</button>
-            <button onclick="showTab('history')">Lecture History</button>
-            <button onclick="location.reload()" style="background:#e74c3c">Logout</button>
-        </nav>
+    <div id="dash" class="container" style="display:none;">
+        <div class="tabs">
+            <button onclick="showTab('live')">Live</button>
+            <button onclick="showTab('history')">History</button>
+        </div>
 
-        <div id="live-tab" class="tab-content">
-            <div class="grid">
-                <div class="card">
-                    <h3>New Lecture</h3>
-                    <input type="text" id="lec-name" placeholder="e.g. Physics 101">
-                    <button onclick="startSession()">Start & Show QR</button>
-                    <div id="qr-box"></div>
-                </div>
-                <div class="card">
-                    <h3>Live Attendance</h3>
-                    <table id="live-table">
-                        <thead><tr><th>Name</th><th>ID</th><th>Dist</th></tr></thead>
-                        <tbody id="live-list"></tbody>
-                    </table>
-                </div>
+        <div id="live-tab" class="grid">
+            <div class="card">
+                <input type="text" id="lec" placeholder="Lecture Title">
+                <button onclick="startSession()">Start Lecture</button>
+                <div id="qr-display"></div>
+            </div>
+            <div class="card">
+                <table id="live-table">
+                    <thead><tr><th>Name</th><th>ID</th><th>Dist</th></tr></thead>
+                    <tbody id="list-body"></tbody>
+                </table>
             </div>
         </div>
 
-        <div id="history-tab" class="tab-content" style="display:none;">
+        <div id="history-tab" style="display:none;">
             <h3>Past Lectures</h3>
-            <div id="history-list"></div>
+            <div id="hist-container"></div>
         </div>
     </div>
 
     <script>
-        let currentTeacher = "";
+        let currentSid = "";
         function login() {
             if(document.getElementById('t-code').value === "2404") {
-                currentTeacher = document.getElementById('t-name').value;
-                document.getElementById('login-screen').style.display='none';
-                document.getElementById('dashboard').style.display='block';
+                document.getElementById('login-box').style.display='none';
+                document.getElementById('dash').style.display='block';
                 loadHistory();
-            } else { alert("Wrong Code!"); }
+            } else { alert("Wrong Code"); }
         }
 
-        function showTab(tab) {
-            document.getElementById('live-tab').style.display = tab === 'live' ? 'block' : 'none';
-            document.getElementById('history-tab').style.display = tab === 'history' ? 'block' : 'none';
+        function showTab(t) {
+            document.getElementById('live-tab').style.display = t==='live' ? 'grid' : 'none';
+            document.getElementById('history-tab').style.display = t==='history' ? 'block' : 'none';
         }
 
         async function startSession() {
@@ -67,21 +61,22 @@
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        teacherName: currentTeacher,
-                        lectureName: document.getElementById('lec-name').value,
+                        teacherName: document.getElementById('t-name').value,
+                        lectureName: document.getElementById('lec').value,
                         location: { lat: pos.coords.latitude, lng: pos.coords.longitude }
                     })
                 });
                 const data = await res.json();
-                document.getElementById('qr-box').innerHTML = `<img src="${data.qrData}" width="200">`;
-                setInterval(() => updateLiveList(data.sessionId), 3000);
+                currentSid = data.sessionId;
+                document.getElementById('qr-display').innerHTML = `<img src="${data.qrData}" width="200">`;
+                setInterval(refreshList, 3000);
             });
         }
 
-        async function updateLiveList(sid) {
-            const res = await fetch('/api/attendance/' + sid);
+        async function refreshList() {
+            const res = await fetch('/api/attendance/' + currentSid);
             const data = await res.json();
-            document.getElementById('live-list').innerHTML = data.map(r => `
+            document.getElementById('list-body').innerHTML = data.map(r => `
                 <tr style="color:${r.distanceFromTeacher > 50 ? 'red' : 'green'}">
                     <td>${r.studentName}</td><td>${r.studentId}</td><td>${r.distanceFromTeacher}m</td>
                 </tr>`).join('');
@@ -89,24 +84,23 @@
 
         async function loadHistory() {
             const res = await fetch('/api/history');
-            const sessions = await res.json();
-            document.getElementById('history-list').innerHTML = sessions.map(s => `
-                <div class="card" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
-                    <span><b>${s.lectureName}</b> - ${new Date(s.createdAt).toLocaleDateString()}</span>
-                    <button onclick="downloadSessionPDF('${s.uniqueId}', '${s.lectureName}')" style="width:auto; padding:5px 15px;">Download PDF</button>
+            const data = await res.json();
+            document.getElementById('hist-container').innerHTML = data.map(s => `
+                <div class="card" style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                    <span>${s.lectureName} (${new Date(s.createdAt).toLocaleDateString()})</span>
+                    <button onclick="downloadPDF('${s.uniqueId}', '${s.lectureName}')" style="width:auto;">Download</button>
                 </div>
             `).join('');
         }
 
-        async function downloadSessionPDF(sid, name) {
+        async function downloadPDF(sid, name) {
             const res = await fetch('/api/attendance/' + sid);
             const data = await res.json();
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
-            doc.text(`Report: ${name}`, 14, 15);
-            const rows = data.map(r => [r.studentName, r.studentId, r.distanceFromTeacher + 'm', new Date(r.timestamp).toLocaleTimeString()]);
-            doc.autoTable({ head: [['Name', 'ID', 'Distance', 'Time']], body: rows, startY: 20 });
-            doc.save(`${name}_Attendance.pdf`);
+            doc.text(`Attendance Report: ${name}`, 14, 15);
+            doc.autoTable({ head: [['Name', 'ID', 'Distance']], body: data.map(r => [r.studentName, r.studentId, r.distanceFromTeacher+'m']) });
+            doc.save(`${name}.pdf`);
         }
     </script>
 </body>

@@ -2,100 +2,106 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Student Portal | Smart Attendance</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Submit Attendance | Smart System</title>
     <link rel="stylesheet" href="style.css">
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container card-small">
         <h2>Student Attendance</h2>
-        <div id="reader" style="width: 100%; border-radius: 10px; overflow: hidden; margin-bottom: 15px;"></div>
+        <p class="subtitle">Please enter your details and allow location access.</p>
         
-        <input type="text" id="s-name" placeholder="Full Name">
-        <input type="text" id="s-id" placeholder="Student Roll No / ID">
-        <input type="text" id="s-session" placeholder="Scanned Session ID" readonly>
-        
-        <button onclick="submitAttendance()" id="sub-btn">Submit Attendance</button>
-        <p id="msg" style="margin-top: 15px; font-weight: bold;"></p>
+        <div id="form-div">
+            <div class="input-group">
+                <input type="text" id="s-name" placeholder="Full Name" required>
+            </div>
+            <div class="input-group">
+                <input type="text" id="s-id" placeholder="Student ID Number" required>
+            </div>
+            <div class="input-group">
+                <input type="text" id="s-session" placeholder="Session ID (from QR)" required>
+            </div>
+            
+            <button onclick="submitAttendance()" id="sub-btn">Submit Attendance</button>
+        </div>
+
+        <div id="status-container">
+            <p id="msg"></p>
+            <p id="dist-info"></p>
+        </div>
     </div>
 
     <script>
-        let studentLoc = null;
-
-        // 1. Initialize QR Scanner
-        const html5QrCode = new Html5Qrcode("reader");
-        const qrConfig = { fps: 10, qrbox: { width: 250, height: 250 } };
-
-        html5QrCode.start({ facingMode: "environment" }, qrConfig, (decodedText) => {
-            document.getElementById('s-session').value = decodedText;
-            document.getElementById('msg').innerText = "QR Scanned Successfully!";
-            document.getElementById('msg').style.color = "green";
-        });
-
-        // 2. Get Student Location
-        function getLocation() {
-            return new Promise((resolve, reject) => {
-                navigator.geolocation.getCurrentPosition(
-                    pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-                    err => {
-                        alert("Please allow location access to mark attendance.");
-                        reject(err);
-                    }
-                );
-            });
+        // Generates a unique digital signature for this specific phone/browser
+        function getFingerprint() {
+            const info = navigator.userAgent + screen.width + navigator.language;
+            return btoa(info); 
         }
 
-        // 3. Submit Data
         async function submitAttendance() {
+            const btn = document.getElementById('sub-btn');
+            const msg = document.getElementById('msg');
+            const distInfo = document.getElementById('dist-info');
+            
             const name = document.getElementById('s-name').value;
             const id = document.getElementById('s-id').value;
             const sid = document.getElementById('s-session').value;
-            const btn = document.getElementById('sub-btn');
 
-            if (!name || !id || !sid) return alert("Please fill all fields and scan QR");
+            if (!name || !id || !sid) {
+                alert("Please fill in all fields.");
+                return;
+            }
 
             btn.disabled = true;
-            btn.innerText = "Checking Location...";
+            btn.innerText = "Processing...";
+            msg.innerText = "Requesting GPS location...";
 
-            try {
-                const loc = await getLocation();
-                const res = await fetch('/api/submit-attendance', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        studentName: name,
-                        studentId: id,
-                        sessionId: sid,
-                        location: loc
-                    })
-                });
+            // Capture GPS Coordinates
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                try {
+                    const response = await fetch('/api/submit-attendance', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            studentName: name,
+                            studentId: id,
+                            sessionId: sid,
+                            fingerprint: getFingerprint(),
+                            location: {
+                                lat: pos.coords.latitude,
+                                lng: pos.coords.longitude
+                            }
+                        })
+                    });
 
-                const data = await res.json();
-                const msg = document.getElementById('msg');
-                
-                if (res.ok) {
-                    msg.innerText = `Attendance Marked! Distance: ${data.distance}m`;
-                    msg.style.color = data.distance > 50 ? "orange" : "green";
-                    if(data.distance > 50) alert("Warning: You are quite far from the teacher!");
-                } else {
-                    msg.innerText = data.message;
-                    msg.style.color = "red";
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        msg.style.color = "#27ae60";
+                        msg.innerText = "✅ Attendance Marked Successfully!";
+                        distInfo.innerText = `Distance from teacher: ${data.distance} meters`;
+                        document.getElementById('form-div').style.display = 'none';
+                    } else {
+                        // Handles "Already Marked", "Proxy Alert", or "Invalid Session"
+                        throw new Error(data.message || "Server Error");
+                    }
+                } catch (err) {
+                    msg.style.color = "#e74c3c";
+                    msg.innerText = "Error: " + err.message;
+                    btn.disabled = false;
+                    btn.innerText = "Retry Submission";
                 }
-            } catch (err) {
-                console.error(err);
-                msg.innerText = "Error marking attendance.";
-            } finally {
+            }, (err) => {
+                msg.style.color = "#e74c3c";
+                msg.innerText = "Location access denied. Please enable GPS and try again.";
                 btn.disabled = false;
-                btn.innerText = "Submit Attendance";
-            }
-            // Creates a unique digital ID for the phone
-function getFingerprint() {
-    return btoa(navigator.userAgent + screen.width + navigator.language);
-}
-
-// Inside your submitAttendance function:
-const fingerprint = getFingerprint();
-// Add it to the JSON body sent to the server
+                btn.innerText = "Retry Submission";
+            }, {
+                enableHighAccuracy: true,
+                timeout: 5000,
+                maximumAge: 0
+            });
         }
     </script>
 </body>
