@@ -2,58 +2,55 @@ const express = require('express');
 const mongoose = require('mongoose');
 const QRCode = require('qrcode');
 const cors = require('cors');
+const path = require('path');
 
-// --- DATABASE MODELS ---
-// (Normally these are in the 'models' folder, make sure they are imported)
-const Session = require('./models/session');
+const Teacher = require('./models/Teacher');
+const Session = require('./models/Session');
 const Attendance = require('./models/Attendance');
 
-const app = express(); // DEFINED FIRST
-
-// --- MIDDLEWARE ---
+const app = express();
 app.use(express.json());
 app.use(cors());
 app.use(express.static('public'));
 
-const DB_URL = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/attendanceDB';
-mongoose.connect(DB_URL);
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/attendanceDB');
 
-// --- ROUTES ---
+// Helper: Haversine Distance Formula
+function getDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371e3; 
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+}
 
-// 1. Generate QR Code
+// Routes
 app.post('/api/generate-session', async (req, res) => {
-    const uniqueId = 'LEC-' + Date.now();
-    const newSession = new Session({ uniqueId });
+    const { teacherName, lectureName, duration, location } = req.body;
+    const uniqueId = 'LEC-' + Math.random().toString(36).substr(2, 6).toUpperCase();
+    const newSession = new Session({ teacherName, lectureName, durationHours: duration, uniqueId, teacherLocation: location });
     await newSession.save();
     const qrData = await QRCode.toDataURL(uniqueId);
     res.json({ qrData, sessionId: uniqueId });
 });
 
-// 2. Submit Attendance (With Geolocation)
 app.post('/api/submit-attendance', async (req, res) => {
     const { studentName, studentId, sessionId, location } = req.body;
-    
-    // Check if session exists
     const session = await Session.findOne({ uniqueId: sessionId });
-    if (!session) return res.status(400).json({ message: "QR Expired!" });
+    if (!session) return res.status(404).json({ message: "Session Expired" });
 
-    // Save record
-    const record = new Attendance({ studentName, studentId, sessionId, location });
+    const dist = getDistance(session.teacherLocation.lat, session.teacherLocation.lng, location.lat, location.lng);
+    const record = new Attendance({ studentName, studentId, sessionId, location, distanceFromTeacher: Math.round(dist) });
     await record.save();
-    res.json({ message: "Attendance Recorded Successfully!" });
+    res.json({ message: "Success", distance: Math.round(dist) });
 });
 
-// 3. Get List
 app.get('/api/attendance/:sessionId', async (req, res) => {
     const records = await Attendance.find({ sessionId: req.params.sessionId });
     res.json(records);
 });
 
-// --- START SERVER ---
-
-// This tells the code to use Render's port, or 3000 if running locally
 const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server is live on port ${PORT}`);
-});
+app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
