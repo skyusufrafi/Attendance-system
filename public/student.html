@@ -88,6 +88,14 @@
                 btn.disabled = false;
                 btn.innerText = "Submit Attendance";
             }
+            // Creates a unique digital ID for the phone
+function getFingerprint() {
+    return btoa(navigator.userAgent + screen.width + navigator.language);
+}
+
+// Inside your submitAttendance function:
+const fingerprint = getFingerprint();
+// Add it to the JSON body sent to the server
         }
     </script>
 </body>
