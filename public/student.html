@@ -1,57 +1,28 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Attendance</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
 <body>
     <div class="container card-small">
-        <h2>Scan QR Code</h2>
-        
-        <div id="reader" style="width: 100%; border-radius: 10px; overflow: hidden; margin-bottom: 10px;"></div>
-        
-        <div id="input-fields">
-            <input type="text" id="s-name" placeholder="Full Name">
-            <input type="text" id="s-id" placeholder="Student ID">
-            <input type="text" id="s-session" placeholder="Session ID (Auto-fills)">
-            <button id="sub-btn" onclick="submitAttendance()">Submit Attendance</button>
-        </div>
-        <p id="status-msg"></p>
+        <div id="reader"></div>
+        <input type="text" id="s-name" placeholder="Full Name">
+        <input type="text" id="s-id" placeholder="ID Number">
+        <input type="text" id="s-sid" placeholder="QR Session ID">
+        <button onclick="submit()">Mark Attendance</button>
+        <p id="msg"></p>
     </div>
 
     <script>
-        const html5QrCode = new Html5Qrcode("reader");
+        const scanner = new Html5Qrcode("reader");
+        scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (id) => {
+            document.getElementById('s-sid').value = id;
+        });
 
-        // Start Camera Function
-        const startScanner = () => {
-            html5QrCode.start(
-                { facingMode: "environment" }, // Rear camera
-                { fps: 10, qrbox: { width: 250, height: 250 } },
-                (decodedText) => {
-                    document.getElementById('s-session').value = decodedText;
-                    // Vibrate on success
-                    if (navigator.vibrate) navigator.vibrate(100);
-                }
-            ).catch(err => {
-                console.error("Camera Error:", err);
-                document.getElementById('status-msg').innerText = "Camera failed: Try opening in Chrome/Safari.";
-            });
-        };
-
-        // Auto-start on load
-        window.onload = startScanner;
-
-        function getFingerprint() {
-            return btoa(navigator.userAgent + screen.width + navigator.language);
-        }
-
-        async function submitAttendance() {
-            const btn = document.getElementById('sub-btn');
-            const msg = document.getElementById('status-msg');
-            
+        async function submit() {
+            const fingerprint = btoa(navigator.userAgent + screen.width);
             navigator.geolocation.getCurrentPosition(async (pos) => {
                 const res = await fetch('/api/submit-attendance', {
                     method: 'POST',
@@ -59,19 +30,15 @@
                     body: JSON.stringify({
                         studentName: document.getElementById('s-name').value,
                         studentId: document.getElementById('s-id').value,
-                        sessionId: document.getElementById('s-session').value,
-                        fingerprint: getFingerprint(),
+                        sessionId: document.getElementById('s-sid').value,
+                        fingerprint: fingerprint,
                         location: { lat: pos.coords.latitude, lng: pos.coords.longitude }
                     })
                 });
                 const data = await res.json();
-                msg.innerText = data.message;
-                msg.style.color = res.ok ? "green" : "red";
-                if(res.ok) {
-                    html5QrCode.stop(); // Stop camera on success
-                    document.getElementById('input-fields').style.display = 'none';
-                }
-            }, () => alert("GPS required for attendance!"));
+                document.getElementById('msg').innerText = data.message;
+                document.getElementById('msg').style.color = res.ok ? "green" : "red";
+            });
         }
     </script>
 </body>

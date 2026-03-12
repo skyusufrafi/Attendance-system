@@ -8,6 +8,5 @@ const AttendanceSchema = new mongoose.Schema({
     distanceFromTeacher: Number,
     timestamp: { type: Date, default: Date.now }
 });
-// Prevents duplicate attendance for the same student in one session
 AttendanceSchema.index({ studentId: 1, sessionId: 1 }, { unique: true });
 module.exports = mongoose.model('Attendance', AttendanceSchema);

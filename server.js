@@ -1,18 +1,17 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const QRCode = require('qrcode');
-const cors = require('cors');
+const path = require('path');
 const Attendance = require('./models/Attendance');
 const Session = require('./models/Session');
+const Teacher = require('./models/Teacher');
 
 const app = express();
 app.use(express.json());
-app.use(cors());
 app.use(express.static('public'));
 
 mongoose.connect(process.env.MONGODB_URI);
 
-// Haversine Distance Formula
 function getDistance(lat1, lon1, lat2, lon2) {
     const R = 6371e3; 
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -23,46 +22,47 @@ function getDistance(lat1, lon1, lat2, lon2) {
     return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
 }
 
-// Teacher: Generate Session
-app.post('/api/generate-session', async (req, res) => {
-    try {
-        const { teacherName, lectureName, location } = req.body;
-        const uniqueId = 'LEC-' + Math.random().toString(36).substr(2, 6).toUpperCase();
-        const newSession = new Session({ teacherName, lectureName, uniqueId, teacherLocation: location });
-        await newSession.save();
-        const qrData = await QRCode.toDataURL(uniqueId);
-        res.json({ qrData, sessionId: uniqueId });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+// Teacher Login with Name, Password, and Secret Code
+app.post('/api/teacher-login', async (req, res) => {
+    const { name, password, secretCode } = req.body;
+    if (secretCode !== "2404") return res.status(401).json({ message: "Invalid Secret Code" });
+    
+    // Check if teacher exists, if not, create them (Auto-registration for first time)
+    let teacher = await Teacher.findOne({ name });
+    if (!teacher) {
+        teacher = new Teacher({ name, password });
+        await teacher.save();
+    } else if (teacher.password !== password) {
+        return res.status(401).json({ message: "Incorrect Password" });
+    }
+    res.json({ success: true, teacherName: teacher.name });
 });
 
-// History: Get All Past Lectures
-app.get('/api/history', async (req, res) => {
-    try {
-        const sessions = await Session.find().sort({ createdAt: -1 });
-        res.json(sessions);
-    } catch (err) { res.status(500).json({ error: err.message }); }
-} );
+app.post('/api/generate-session', async (req, res) => {
+    const { teacherName, lectureName, location } = req.body;
+    const uniqueId = 'LEC-' + Math.random().toString(36).substr(2, 6).toUpperCase();
+    const newSession = new Session({ teacherName, lectureName, uniqueId, teacherLocation: location });
+    await newSession.save();
+    const qrData = await QRCode.toDataURL(uniqueId);
+    res.json({ qrData, sessionId: uniqueId });
+});
 
-// Student: Submit Attendance
+app.get('/api/history/:teacherName', async (req, res) => {
+    const sessions = await Session.find({ teacherName: req.params.teacherName }).sort({ createdAt: -1 });
+    res.json(sessions);
+});
+
 app.post('/api/submit-attendance', async (req, res) => {
     try {
         const { studentName, studentId, sessionId, location, fingerprint } = req.body;
         const session = await Session.findOne({ uniqueId: sessionId });
-        
         if (!session) return res.status(404).json({ message: "Session Not Found" });
 
-        // Anti-Proxy Check
         const deviceUsed = await Attendance.findOne({ deviceFingerprint: fingerprint, sessionId });
-        if (deviceUsed) return res.status(403).json({ message: "Device already used for this session!" });
+        if (deviceUsed) return res.status(403).json({ message: "Device already used!" });
 
         const dist = getDistance(session.teacherLocation.lat, session.teacherLocation.lng, location.lat, location.lng);
-        
-        const record = new Attendance({ 
-            studentName, studentId, sessionId, location, 
-            deviceFingerprint: fingerprint, 
-            distanceFromTeacher: Math.round(dist) 
-        });
-
+        const record = new Attendance({ studentName, studentId, sessionId, location, deviceFingerprint: fingerprint, distanceFromTeacher: Math.round(dist) });
         await record.save();
         res.json({ message: "Success", distance: Math.round(dist) });
     } catch (err) {
@@ -77,4 +77,4 @@ app.get('/api/attendance/:sessionId', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, '0.0.0.0', () => console.log(`Server running on ${PORT}`));
+app.listen(PORT, '0.0.0.0');

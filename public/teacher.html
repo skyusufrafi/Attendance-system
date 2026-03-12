@@ -8,28 +8,31 @@
 </head>
 <body>
     <div id="login-box" class="container card-small">
-        <h2>Secure Login</h2>
-        <input type="password" id="t-code" placeholder="Enter Code (2404)">
-        <button onclick="login()">Enter</button>
+        <h2>Teacher Login</h2>
+        <input type="text" id="t-user" placeholder="Name">
+        <input type="password" id="t-pass" placeholder="Password">
+        <input type="password" id="t-secret" placeholder="Secret Code (2404)">
+        <button onclick="login()">Login</button>
     </div>
 
     <div id="dash" class="container" style="display:none;">
         <div class="tabs">
-            <button onclick="showTab('live')">Live</button>
+            <button onclick="showTab('live')">Live Session</button>
             <button onclick="showTab('history')">History</button>
+            <button onclick="location.reload()" style="background:#ff4757">Logout</button>
         </div>
 
         <div id="live-tab" class="grid">
             <div class="card">
-                <h3>Start Session</h3>
-                <input type="text" id="lec" placeholder="Lecture Title">
+                <h3>New Lecture</h3>
+                <input type="text" id="lec-title" placeholder="e.g. Math 101">
                 <button onclick="startSession()">Generate QR</button>
-                <div id="qr-display" style="margin-top:15px;"></div>
+                <div id="qr-box"></div>
             </div>
             <div class="card">
-                <h3>Attendance List</h3>
-                <table>
-                    <thead><tr><th>Name</th><th>ID</th><th>Distance</th></tr></thead>
+                <h3>Live List</h3>
+                <table id="live-table">
+                    <thead><tr><th>Name</th><th>ID</th><th>Dist</th></tr></thead>
                     <tbody id="list-body"></tbody>
                 </table>
             </div>
@@ -37,18 +40,31 @@
 
         <div id="history-tab" style="display:none;">
             <h3>Past Lectures</h3>
-            <div id="hist-container"></div>
+            <div id="hist-list"></div>
         </div>
     </div>
 
     <script>
+        let user = "";
         let currentSid = "";
-        function login() {
-            if(document.getElementById('t-code').value === "2404") {
+
+        async function login() {
+            const res = await fetch('/api/teacher-login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    name: document.getElementById('t-user').value,
+                    password: document.getElementById('t-pass').value,
+                    secretCode: document.getElementById('t-secret').value
+                })
+            });
+            const data = await res.json();
+            if(res.ok) {
+                user = data.teacherName;
                 document.getElementById('login-box').style.display='none';
                 document.getElementById('dash').style.display='block';
                 loadHistory();
-            } else { alert("Access Denied"); }
+            } else { alert(data.message); }
         }
 
         function showTab(t) {
@@ -62,13 +78,14 @@
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        lectureName: document.getElementById('lec').value,
+                        teacherName: user,
+                        lectureName: document.getElementById('lec-title').value,
                         location: { lat: pos.coords.latitude, lng: pos.coords.longitude }
                     })
                 });
                 const data = await res.json();
                 currentSid = data.sessionId;
-                document.getElementById('qr-display').innerHTML = `<img src="${data.qrData}" width="200">`;
+                document.getElementById('qr-box').innerHTML = `<img src="${data.qrData}" width="200">`;
                 setInterval(refreshList, 3000);
             });
         }
@@ -83,12 +100,12 @@
         }
 
         async function loadHistory() {
-            const res = await fetch('/api/history');
+            const res = await fetch('/api/history/' + user);
             const data = await res.json();
-            document.getElementById('hist-container').innerHTML = data.map(s => `
+            document.getElementById('hist-list').innerHTML = data.map(s => `
                 <div class="card" style="display:flex; justify-content:space-between; margin-bottom:10px;">
-                    <span>${s.lectureName} (${new Date(s.createdAt).toLocaleDateString()})</span>
-                    <button onclick="downloadPDF('${s.uniqueId}', '${s.lectureName}')" style="width:auto;">PDF</button>
+                    <span><b>${s.lectureName}</b> (${new Date(s.createdAt).toLocaleDateString()})</span>
+                    <button onclick="downloadPDF('${s.uniqueId}', '${s.lectureName}')" style="width:auto;">Download PDF</button>
                 </div>
             `).join('');
         }
