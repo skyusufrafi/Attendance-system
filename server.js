@@ -1,7 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const QRCode = require('qrcode');
-const path = require('path');
 const Attendance = require('./models/Attendance');
 const Session = require('./models/Session');
 const Teacher = require('./models/Teacher');
@@ -12,6 +11,7 @@ app.use(express.static('public'));
 
 mongoose.connect(process.env.MONGODB_URI);
 
+// Haversine formula to ensure student is in the room
 function getDistance(lat1, lon1, lat2, lon2) {
     const R = 6371e3; 
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -22,12 +22,11 @@ function getDistance(lat1, lon1, lat2, lon2) {
     return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
 }
 
-// Teacher Login with Name, Password, and Secret Code
+// Teacher Authentication
 app.post('/api/teacher-login', async (req, res) => {
     const { name, password, secretCode } = req.body;
     if (secretCode !== "2404") return res.status(401).json({ message: "Invalid Secret Code" });
     
-    // Check if teacher exists, if not, create them (Auto-registration for first time)
     let teacher = await Teacher.findOne({ name });
     if (!teacher) {
         teacher = new Teacher({ name, password });
@@ -56,15 +55,16 @@ app.post('/api/submit-attendance', async (req, res) => {
     try {
         const { studentName, studentId, sessionId, location, fingerprint } = req.body;
         const session = await Session.findOne({ uniqueId: sessionId });
-        if (!session) return res.status(404).json({ message: "Session Not Found" });
+        if (!session) return res.status(404).json({ message: "Session Expired" });
 
+        // Check if device fingerprint was already used
         const deviceUsed = await Attendance.findOne({ deviceFingerprint: fingerprint, sessionId });
-        if (deviceUsed) return res.status(403).json({ message: "Device already used!" });
+        if (deviceUsed) return res.status(403).json({ message: "Proxy Alert: Device already used!" });
 
         const dist = getDistance(session.teacherLocation.lat, session.teacherLocation.lng, location.lat, location.lng);
         const record = new Attendance({ studentName, studentId, sessionId, location, deviceFingerprint: fingerprint, distanceFromTeacher: Math.round(dist) });
         await record.save();
-        res.json({ message: "Success", distance: Math.round(dist) });
+        res.json({ message: "Attendance Marked!", distance: Math.round(dist) });
     } catch (err) {
         if (err.code === 11000) return res.status(400).json({ message: "ID already marked!" });
         res.status(500).json({ message: "Server Error" });

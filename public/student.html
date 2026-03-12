@@ -1,28 +1,36 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Student Attendance</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Check-In</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
-<body>
-    <div class="container card-small">
-        <div id="reader"></div>
-        <input type="text" id="s-name" placeholder="Full Name">
-        <input type="text" id="s-id" placeholder="ID Number">
-        <input type="text" id="s-sid" placeholder="QR Session ID">
-        <button onclick="submit()">Mark Attendance</button>
-        <p id="msg"></p>
+<body class="center-content">
+    <div class="glass-container student-card">
+        <h2>Attendance Check-In</h2>
+        <div id="reader" class="scanner-window"></div>
+        <div class="form-group">
+            <input type="text" id="s-name" placeholder="Full Name">
+            <input type="text" id="s-id" placeholder="University ID">
+            <input type="text" id="s-sid" placeholder="QR Session ID" readonly>
+        </div>
+        <button class="primary-btn" onclick="submit()">Verify & Submit</button>
+        <p id="msg" class="status-text"></p>
     </div>
 
     <script>
         const scanner = new Html5Qrcode("reader");
-        scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (id) => {
+        scanner.start({ facingMode: "environment" }, { fps: 15, qrbox: 200 }, (id) => {
             document.getElementById('s-sid').value = id;
+            if (navigator.vibrate) navigator.vibrate(50);
         });
 
         async function submit() {
-            const fingerprint = btoa(navigator.userAgent + screen.width);
+            const btn = document.querySelector('button');
+            btn.innerText = "Processing...";
+            const fingerprint = btoa(navigator.userAgent + screen.width + navigator.language);
+            
             navigator.geolocation.getCurrentPosition(async (pos) => {
                 const res = await fetch('/api/submit-attendance', {
                     method: 'POST',
@@ -36,9 +44,11 @@
                     })
                 });
                 const data = await res.json();
-                document.getElementById('msg').innerText = data.message;
-                document.getElementById('msg').style.color = res.ok ? "green" : "red";
-            });
+                const msg = document.getElementById('msg');
+                msg.innerText = data.message;
+                msg.style.color = res.ok ? "#00ff88" : "#ff4757";
+                btn.innerText = "Verify & Submit";
+            }, () => alert("GPS is required for verification!"));
         }
     </script>
 </body>

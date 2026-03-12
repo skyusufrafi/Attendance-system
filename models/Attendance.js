@@ -8,5 +8,6 @@ const AttendanceSchema = new mongoose.Schema({
     distanceFromTeacher: Number,
     timestamp: { type: Date, default: Date.now }
 });
+// The "Anti-Proxy" Wall: One ID per Session
 AttendanceSchema.index({ studentId: 1, sessionId: 1 }, { unique: true });
 module.exports = mongoose.model('Attendance', AttendanceSchema);
