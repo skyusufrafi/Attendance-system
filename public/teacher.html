@@ -73,10 +73,23 @@
                 setInterval(refresh, 3000);
             });
         }
-        async function refresh(){
-            const res = await fetch('/api/attendance/'+sid); const d = await res.json();
-            document.getElementById('live-body').innerHTML = d.map(r=>`<tr><td>${r.studentName}</td><td>${r.studentId}</td><td>${r.distanceFromTeacher}m</td></tr>`).join('');
-        }
+        async function refreshLive() {
+    const res = await fetch('/api/attendance/' + sid);
+    const d = await res.json();
+    
+    // Create a Map to store only the most recent entry per Student ID
+    const uniqueRecords = new Map();
+    d.forEach(record => {
+        uniqueRecords.set(record.studentId, record);
+    });
+
+    document.getElementById('live-body').innerHTML = Array.from(uniqueRecords.values()).map(r => `
+        <tr style="color:${r.distanceFromTeacher > 50 ? '#ff4757' : '#00ff88'}">
+            <td>${r.studentName}</td>
+            <td>${r.studentId}</td>
+            <td>${r.distanceFromTeacher}m</td>
+        </tr>`).join('');
+}
         async function loadHist(){
             const res = await fetch('/api/history/'+prof.email); const d = await res.json();
             document.getElementById('hist-list').innerHTML = d.map(s=>`<div class="glass-card"><b>${s.lectureName}</b> (${new Date(s.createdAt).toLocaleDateString()}) <button onclick="download('${s.uniqueId}')">PDF</button></div>`).join('');
