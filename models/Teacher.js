@@ -4,5 +4,5 @@ module.exports = mongoose.model('Teacher', new mongoose.Schema({
     email: { type: String, unique: true },
     password: String,
     department: String,
-    secretCode: { type: String }
+    secretCode: { type: String, default: "2404" }
 }));
