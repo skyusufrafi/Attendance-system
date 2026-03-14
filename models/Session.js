@@ -1,9 +1,8 @@
-const mongoose = require('mongoose');
+// Session.js
 const SessionSchema = new mongoose.Schema({
-    teacherName: String,
+    teacherEmail: String,
     lectureName: String,
     uniqueId: String,
     teacherLocation: { lat: Number, lng: Number },
     createdAt: { type: Date, default: Date.now }
 });
-module.exports = mongoose.model('Session', SessionSchema);

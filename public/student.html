@@ -2,53 +2,54 @@
 <html>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Check-In</title>
+    <title>AIKTC | Student Portal</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
-<body class="center-content">
-    <div class="glass-container student-card">
-        <h2>Attendance Check-In</h2>
-        <div id="reader" class="scanner-window"></div>
-        <div class="form-group">
-            <input type="text" id="s-name" placeholder="Full Name">
-            <input type="text" id="s-id" placeholder="University ID">
-            <input type="text" id="s-sid" placeholder="QR Session ID" readonly>
+<body>
+    <div id="s-auth" class="glass-container">
+        <h2>Student Access</h2>
+        <div id="sl-box">
+            <input type="text" id="sl-id" placeholder="Roll Number">
+            <input type="password" id="sl-pass" placeholder="Password">
+            <button class="primary-btn" onclick="login()">Login</button>
+            <p onclick="stoggle(true)">Create Account</p>
         </div>
-        <button class="primary-btn" onclick="submit()">Verify & Submit</button>
-        <p id="msg" class="status-text"></p>
+        <div id="sr-box" style="display:none">
+            <input type="text" id="sr-name" placeholder="Full Name">
+            <input type="text" id="sr-id" placeholder="Roll Number">
+            <input type="text" id="sr-email" placeholder="Email">
+            <input type="password" id="sr-pass" placeholder="Password">
+            <button class="primary-btn" onclick="signup()">Register</button>
+            <p onclick="stoggle(false)">Back to Login</p>
+        </div>
+    </div>
+
+    <div id="s-dash" class="glass-container" style="display:none">
+        <h2 id="welcome">Welcome</h2>
+        <div id="reader"></div>
+        <input type="text" id="session-id" placeholder="Scan QR to fill ID" readonly>
+        <button class="primary-btn" onclick="submit()">Mark Attendance</button>
+        <p id="msg"></p>
     </div>
 
     <script>
-        const scanner = new Html5Qrcode("reader");
-        scanner.start({ facingMode: "environment" }, { fps: 15, qrbox: 200 }, (id) => {
-            document.getElementById('s-sid').value = id;
-            if (navigator.vibrate) navigator.vibrate(50);
-        });
-
-        async function submit() {
-            const btn = document.querySelector('button');
-            btn.innerText = "Processing...";
-            const fingerprint = btoa(navigator.userAgent + screen.width + navigator.language);
-            
-            navigator.geolocation.getCurrentPosition(async (pos) => {
-                const res = await fetch('/api/submit-attendance', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        studentName: document.getElementById('s-name').value,
-                        studentId: document.getElementById('s-id').value,
-                        sessionId: document.getElementById('s-sid').value,
-                        fingerprint: fingerprint,
-                        location: { lat: pos.coords.latitude, lng: pos.coords.longitude }
-                    })
-                });
-                const data = await res.json();
-                const msg = document.getElementById('msg');
-                msg.innerText = data.message;
-                msg.style.color = res.ok ? "#00ff88" : "#ff4757";
-                btn.innerText = "Verify & Submit";
-            }, () => alert("GPS is required for verification!"));
+        let stu = null; const scanner = new Html5Qrcode("reader");
+        function stoggle(r){ document.getElementById('sl-box').style.display=r?'none':'block'; document.getElementById('sr-box').style.display=r?'block':'none'; }
+        async function signup(){
+            await fetch('/api/student-signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fullName:document.getElementById('sr-name').value,studentId:document.getElementById('sr-id').value,email:document.getElementById('sr-email').value,password:document.getElementById('sr-pass').value})});
+            alert("Success"); stoggle(false);
+        }
+        async function login(){
+            const res = await fetch('/api/student-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:document.getElementById('sl-id').value,pass:document.getElementById('sl-pass').value})});
+            if(res.ok){ stu = await res.json(); document.getElementById('s-auth').style.display='none'; document.getElementById('s-dash').style.display='block'; document.getElementById('welcome').innerText="Hi, "+stu.fullName; start(); }
+        }
+        function start(){ scanner.start({facingMode:"environment"},{fps:10,qrbox:250},id=>{document.getElementById('session-id').value=id;}); }
+        async function submit(){
+            navigator.geolocation.getCurrentPosition(async p=>{
+                const res = await fetch('/api/submit-attendance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({studentId:stu.studentId,studentName:stu.fullName,sessionId:document.getElementById('session-id').value,location:{lat:p.coords.latitude,lng:p.coords.longitude},fingerprint:btoa(navigator.userAgent+screen.width)})});
+                const d = await res.json(); document.getElementById('msg').innerText = d.message;
+            });
         }
     </script>
 </body>

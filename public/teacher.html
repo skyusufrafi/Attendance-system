@@ -1,151 +1,92 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Teacher Central | Pro</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <title>AIKTC | Faculty Portal</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf-plugin-autotable.min.js"></script>
 </head>
 <body>
-    <div id="login-box" class="glass-container">
-        <h2 class="title">Teacher Portal</h2>
-        <div class="input-group">
-            <input type="text" id="t-user" placeholder="Full Name" required>
-            <input type="password" id="t-pass" placeholder="Account Password" required>
-            <input type="password" id="t-secret" placeholder="Global Secret (2404)" required>
+    <div id="t-auth" class="glass-container">
+        <h2 id="t-title">Faculty Login</h2>
+        <div id="t-login-box">
+            <input type="email" id="tl-email" placeholder="Faculty Email">
+            <input type="password" id="tl-pass" placeholder="Password">
+            <button class="primary-btn" onclick="login()">Login</button>
+            <p onclick="toggle(true)">Register Account</p>
         </div>
-        <button class="primary-btn" onclick="login()">Authenticate</button>
+        <div id="t-reg-box" style="display:none">
+            <input type="text" id="tr-name" placeholder="Full Name">
+            <input type="text" id="tr-dept" placeholder="Department">
+            <input type="email" id="tr-email" placeholder="Email">
+            <input type="password" id="tr-pass" placeholder="Password">
+            <input type="password" id="tr-code" placeholder="Secret Code (2404)">
+            <button class="primary-btn" onclick="signup()">Signup</button>
+            <p onclick="toggle(false)">Back to Login</p>
+        </div>
     </div>
 
-    <div id="dash" class="main-layout" style="display:none;">
-        <nav class="sidebar">
-            <div class="profile-section">
-                <div class="avatar"></div>
-                <h3 id="teacher-display">Teacher</h3>
-            </div>
-            <div class="nav-links">
-                <button onclick="showTab('live')" class="nav-btn active">Live Lecture</button>
-                <button onclick="showTab('history')" class="nav-btn">Recordings</button>
-                <button onclick="location.reload()" class="logout-btn">Log Out</button>
-            </div>
-        </nav>
-
-        <main class="content">
-            <div id="live-tab" class="tab-view">
-                <div class="top-row">
-                    <div class="glass-card setup">
-                        <h3>Session Setup</h3>
-                        <input type="text" id="lec-title" placeholder="e.g., Advanced Physics">
-                        <button class="primary-btn" onclick="startSession()">Launch QR</button>
-                        <div id="qr-box"></div>
-                    </div>
-                    <div class="stats-box glass-card">
-                        <h3>Real-time Count</h3>
-                        <div class="counter" id="total-count">0</div>
-                        <p>Students Present</p>
-                    </div>
+    <div id="t-dash" class="main-layout" style="display:none">
+        <div class="sidebar">
+            <h2 id="user-name">Prof.</h2>
+            <p id="user-dept"></p>
+            <button class="primary-btn" onclick="show('live')">Live Session</button>
+            <button class="primary-btn" onclick="show('hist')">History</button>
+            <button class="primary-btn" style="background:#d63031" onclick="location.reload()">Logout</button>
+        </div>
+        <div class="content">
+            <div id="live-view">
+                <div class="glass-card">
+                    <h3>New Lecture</h3>
+                    <input type="text" id="lec-name" placeholder="Subject Name">
+                    <button class="primary-btn" onclick="start()">Start QR</button>
+                    <div id="qr-area" style="margin-top:20px"></div>
                 </div>
-                <div class="glass-card list-area">
-                    <h3>Live Attendance Feed</h3>
-                    <table id="live-table">
-                        <thead><tr><th>Student</th><th>ID</th><th>Accuracy</th><th>Time</th></tr></thead>
-                        <tbody id="list-body"></tbody>
-                    </table>
+                <div class="glass-card">
+                    <h3>Real-time Attendance</h3>
+                    <table id="live-table"><thead><tr><th>Name</th><th>Roll</th><th>Dist</th></tr></thead><tbody id="live-body"></tbody></table>
                 </div>
             </div>
-
-            <div id="history-tab" class="tab-view" style="display:none;">
-                <h2 class="title">Lecture Archives</h2>
-                <div id="hist-list" class="history-grid"></div>
+            <div id="hist-view" style="display:none">
+                <h2>Past Lectures</h2>
+                <div id="hist-list"></div>
             </div>
-        </main>
+        </div>
     </div>
 
     <script>
-        let user = ""; let currentSid = "";
-
-        async function login() {
-            const res = await fetch('/api/teacher-login', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    name: document.getElementById('t-user').value,
-                    password: document.getElementById('t-pass').value,
-                    secretCode: document.getElementById('t-secret').value
-                })
-            });
-            const data = await res.json();
-            if(res.ok) {
-                user = data.teacherName;
-                document.getElementById('teacher-display').innerText = user;
-                document.getElementById('login-box').style.display='none';
-                document.getElementById('dash').style.display='flex';
-                loadHistory();
-            } else { alert(data.message); }
+        let prof = null; let sid = "";
+        function toggle(r){ document.getElementById('t-login-box').style.display=r?'none':'block'; document.getElementById('t-reg-box').style.display=r?'block':'none'; }
+        async function signup(){
+            const res = await fetch('/api/teacher-signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fullName:document.getElementById('tr-name').value,department:document.getElementById('tr-dept').value,email:document.getElementById('tr-email').value,password:document.getElementById('tr-pass').value,secretCode:document.getElementById('tr-code').value})});
+            if(res.ok){alert("Success"); toggle(false);} else alert("Invalid Code");
         }
-
-        function showTab(t) {
-            document.getElementById('live-tab').style.display = t==='live' ? 'block' : 'none';
-            document.getElementById('history-tab').style.display = t==='history' ? 'block' : 'none';
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-            event.target.classList.add('active');
+        async function login(){
+            const res = await fetch('/api/teacher-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:document.getElementById('tl-email').value,pass:document.getElementById('tl-pass').value})});
+            if(res.ok){ prof = await res.json(); document.getElementById('t-auth').style.display='none'; document.getElementById('t-dash').style.display='flex'; document.getElementById('user-name').innerText=prof.fullName; document.getElementById('user-dept').innerText=prof.department; loadHist();}
         }
-
-        async function startSession() {
-            navigator.geolocation.getCurrentPosition(async (pos) => {
-                const res = await fetch('/api/generate-session', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        teacherName: user,
-                        lectureName: document.getElementById('lec-title').value,
-                        location: { lat: pos.coords.latitude, lng: pos.coords.longitude }
-                    })
-                });
-                const data = await res.json();
-                currentSid = data.sessionId;
-                document.getElementById('qr-box').innerHTML = `<img src="${data.qrData}" class="qr-img">`;
-                setInterval(refreshList, 3000);
+        function show(v){ document.getElementById('live-view').style.display=v==='live'?'block':'none'; document.getElementById('hist-view').style.display=v==='hist'?'block':'none'; }
+        async function start(){
+            navigator.geolocation.getCurrentPosition(async p=>{
+                const res = await fetch('/api/generate-session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({teacherEmail:prof.email,lectureName:document.getElementById('lec-name').value,location:{lat:p.coords.latitude,lng:p.coords.longitude}})});
+                const d = await res.json(); sid = d.uniqueId; document.getElementById('qr-area').innerHTML = `<img src="${d.qr}" width="200">`;
+                setInterval(refresh, 3000);
             });
         }
-
-        async function refreshList() {
-            if(!currentSid) return;
-            const res = await fetch('/api/attendance/' + currentSid);
-            const data = await res.json();
-            document.getElementById('total-count').innerText = data.length;
-            document.getElementById('list-body').innerHTML = data.map(r => `
-                <tr class="${r.distanceFromTeacher > 50 ? 'flagged' : 'verified'}">
-                    <td>${r.studentName}</td>
-                    <td>${r.studentId}</td>
-                    <td>${r.distanceFromTeacher}m</td>
-                    <td>${new Date(r.timestamp).toLocaleTimeString()}</td>
-                </tr>`).join('');
+        async function refresh(){
+            const res = await fetch('/api/attendance/'+sid); const d = await res.json();
+            document.getElementById('live-body').innerHTML = d.map(r=>`<tr><td>${r.studentName}</td><td>${r.studentId}</td><td>${r.distanceFromTeacher}m</td></tr>`).join('');
         }
-
-        async function loadHistory() {
-            const res = await fetch('/api/history/' + user);
-            const data = await res.json();
-            document.getElementById('hist-list').innerHTML = data.map(s => `
-                <div class="glass-card history-item">
-                    <div>
-                        <h4>${s.lectureName}</h4>
-                        <p>${new Date(s.createdAt).toLocaleDateString()}</p>
-                    </div>
-                    <button class="small-btn" onclick="downloadPDF('${s.uniqueId}', '${s.lectureName}')">Export PDF</button>
-                </div>
-            `).join('');
+        async function loadHist(){
+            const res = await fetch('/api/history/'+prof.email); const d = await res.json();
+            document.getElementById('hist-list').innerHTML = d.map(s=>`<div class="glass-card"><b>${s.lectureName}</b> (${new Date(s.createdAt).toLocaleDateString()}) <button onclick="download('${s.uniqueId}')">PDF</button></div>`).join('');
         }
-
-        async function downloadPDF(sid, name) {
-            const res = await fetch('/api/attendance/' + sid);
-            const data = await res.json();
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            doc.setFontSize(20); doc.text(name, 14, 20);
-            doc.autoTable({ head: [['Name', 'ID', 'Distance', 'Time']], body: data.map(r => [r.studentName, r.studentId, r.distanceFromTeacher+'m', new Date(r.timestamp).toLocaleTimeString()]) });
-            doc.save(`${name}_Records.pdf`);
+        async function download(id){
+            const res = await fetch('/api/attendance/'+id); const d = await res.json();
+            const { jsPDF } = window.jspdf; const doc = new jsPDF();
+            doc.text("Attendance Report", 14, 15);
+            doc.autoTable({head:[['Name','Roll','Distance']], body:d.map(r=>[r.studentName, r.studentId, r.distanceFromTeacher+'m'])});
+            doc.save("Report.pdf");
         }
     </script>
 </body>
